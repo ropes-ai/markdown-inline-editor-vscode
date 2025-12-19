@@ -31,6 +31,17 @@ export function activate(context: vscode.ExtensionContext) {
     linkProvider
   );
 
+  // Register command for toggling markdown decorations
+  const toggleDecorationsCommand = vscode.commands.registerCommand(
+    'mdInline.toggleDecorations',
+    () => {
+      const enabled = decorator.toggleDecorations();
+      vscode.window.showInformationMessage(
+        `Markdown decorations ${enabled ? 'enabled' : 'disabled'}`
+      );
+    }
+  );
+
   // Register command for navigating to anchor links
   const navigateToAnchorCommand = vscode.commands.registerCommand(
     'markdown-inline-editor.navigateToAnchor',
@@ -69,8 +80,8 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
-  const changeActiveTextEditor = vscode.window.onDidChangeActiveTextEditor(() => {
-    decorator.setActiveEditor(vscode.window.activeTextEditor);
+  const changeActiveTextEditor = vscode.window.onDidChangeActiveTextEditor((editor) => {
+    decorator.setActiveEditor(editor);
   });
   
   const changeTextEditorSelection = vscode.window.onDidChangeTextEditorSelection(() => {
@@ -87,6 +98,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(changeTextEditorSelection);
   context.subscriptions.push(changeDocument);
   context.subscriptions.push(linkProviderDisposable);
+  context.subscriptions.push(toggleDecorationsCommand);
   context.subscriptions.push(navigateToAnchorCommand);
   context.subscriptions.push({ dispose: () => decorator.dispose() });
 }

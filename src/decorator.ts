@@ -66,6 +66,9 @@ export class Decorator {
   
   /** requestIdleCallback handle for idle updates */
   private idleCallbackHandle: number | undefined;
+  
+  /** Whether decorations are enabled or disabled */
+  private decorationsEnabled = true;
 
   private hideDecorationType = HideDecorationType();
   private boldDecorationType = BoldDecorationType();
@@ -108,7 +111,9 @@ export class Decorator {
     if (!textEditor) {
       return;
     }
+    
     this.activeEditor = textEditor;
+    
     // Update immediately when switching editors (no debounce)
     this.updateDecorationsForSelection();
   }
@@ -215,11 +220,60 @@ export class Decorator {
   }
 
   /**
+   * Toggle decorations on/off.
+   * 
+   * @returns {boolean} The new state (true = enabled, false = disabled)
+   */
+  toggleDecorations(): boolean {
+    this.decorationsEnabled = !this.decorationsEnabled;
+    
+    if (this.decorationsEnabled) {
+      // Re-enable: update decorations immediately
+      this.updateDecorationsForSelection();
+    } else {
+      // Disable: clear all decorations
+      this.clearAllDecorations();
+    }
+    
+    return this.decorationsEnabled;
+  }
+  
+  /**
+   * Check if decorations are currently enabled.
+   * 
+   * @returns {boolean} True if decorations are enabled
+   */
+  isEnabled(): boolean {
+    return this.decorationsEnabled;
+  }
+  
+  /**
+   * Clear all decorations from the active editor.
+   * 
+   * @private
+   */
+  private clearAllDecorations(): void {
+    if (!this.activeEditor) {
+      return;
+    }
+    
+    // Set all decoration types to empty arrays
+    for (const decorationType of this.decorationTypeMap.values()) {
+      this.activeEditor.setDecorations(decorationType, []);
+    }
+  }
+
+  /**
    * Internal method that performs the actual decoration update.
    * This orchestrates parsing, filtering, and application.
    */
   private updateDecorationsInternal() {
     if (!this.activeEditor) {
+      return;
+    }
+
+    // Early exit if decorations are disabled
+    if (!this.decorationsEnabled) {
       return;
     }
 
