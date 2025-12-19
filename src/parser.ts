@@ -1,4 +1,4 @@
-import type { Root, Node, Strong, Emphasis, Heading, InlineCode, Code, Link, Image, Delete, Blockquote, List, ListItem, ThematicBreak } from 'mdast';
+import type { Root, Node, Strong, Emphasis, Heading, InlineCode, Code, Link, Image, Delete, Blockquote, ListItem, ThematicBreak } from 'mdast';
 import { getRemarkProcessorSync, getRemarkProcessor } from './parser-remark';
 
 /**
@@ -125,6 +125,8 @@ export class MarkdownParser {
   /**
    * Processes the remark AST to extract decoration ranges.
    * 
+   * Uses a proper visitor pattern with ancestor tracking for efficient traversal.
+   * 
    * @private
    * @param {Root} ast - The parsed AST root node
    * @param {string} text - The original markdown text
@@ -135,28 +137,31 @@ export class MarkdownParser {
     text: string,
     decorations: DecorationRange[]
   ): void {
-    // Track ancestors during traversal
-    const ancestors: Node[] = [];
-    
     // Track processed blockquote positions to avoid duplicates from nested blockquotes
     const processedBlockquotePositions = new Set<number>();
+    
+    // Use a map to efficiently track ancestors for each node
+    const ancestorMap = new Map<Node, Node[]>();
 
     this.visit(ast, (node: Node, index: number | undefined, parent: Node | undefined) => {
       if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) {
         return;
       }
 
-      // Build ancestor chain for nested formatting detection
-      // Check immediate parent and see if we can find it in ancestors
+      // Build ancestor chain efficiently using parent's cached ancestors
       const currentAncestors: Node[] = [];
       if (parent) {
         currentAncestors.push(parent);
-        // Try to find parent's ancestors by checking if parent is a child of any ancestor
-        for (const ancestor of ancestors) {
-          if (this.isNodeChildOf(ancestor, parent)) {
-            currentAncestors.push(ancestor);
-          }
+        // Get parent's ancestors from cache (O(1) lookup instead of O(n) search)
+        const parentAncestors = ancestorMap.get(parent);
+        if (parentAncestors) {
+          currentAncestors.push(...parentAncestors);
         }
+      }
+      
+      // Cache this node's ancestors for its children to use
+      if (currentAncestors.length > 0) {
+        ancestorMap.set(node, currentAncestors);
       }
 
       switch (node.type) {
@@ -831,17 +836,4 @@ export class MarkdownParser {
     return null;
   }
 
-  /**
-   * Checks if a node is a child of another node (recursively).
-   */
-  private isNodeChildOf(parent: Node, child: Node): boolean {
-    if (!('children' in parent)) {
-      return false;
-    }
-    const parentWithChildren = parent as any;
-    if (!parentWithChildren.children || !Array.isArray(parentWithChildren.children)) {
-      return false;
-    }
-    return parentWithChildren.children.some((c: Node) => c === child || this.isNodeChildOf(c, child));
-  }
 }

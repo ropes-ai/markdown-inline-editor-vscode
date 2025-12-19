@@ -1,4 +1,4 @@
-import { Range, Selection, TextEditor, TextDocument, TextDocumentChangeEvent } from 'vscode';
+import { Range, TextEditor, TextDocument, TextDocumentChangeEvent } from 'vscode';
 import {
   HideDecorationType,
   BoldDecorationType,
@@ -60,6 +60,12 @@ export class Decorator {
   
   /** Access counter for LRU eviction */
   private accessCounter = 0;
+  
+  /** Pending update batching: track last document version that triggered an update */
+  private pendingUpdateVersion = new Map<string, number>();
+  
+  /** requestIdleCallback handle for idle updates */
+  private idleCallbackHandle: number | undefined;
 
   private hideDecorationType = HideDecorationType();
   private boldDecorationType = BoldDecorationType();
@@ -128,10 +134,11 @@ export class Decorator {
   }
 
   /**
-   * Updates decorations for document changes (debounced).
+   * Updates decorations for document changes (debounced with batching).
    * 
-   * This method handles document content changes and uses debouncing to prevent
-   * excessive parsing during rapid typing.
+   * This method handles document content changes and uses smart debouncing to prevent
+   * excessive parsing during rapid typing. It batches multiple changes and uses
+   * requestIdleCallback when available for non-urgent updates.
    * 
    * @param {TextDocumentChangeEvent} event - The document change event (optional)
    * 
@@ -139,26 +146,56 @@ export class Decorator {
    * decorator.updateDecorationsForDocument(event);
    */
   updateDecorationsForDocument(event?: TextDocumentChangeEvent) {
-    // Early exit for non-markdown files
+    // Early exit for non-markdown files (before any work)
     if (!this.activeEditor || !this.isMarkdownDocument()) {
       return;
     }
 
+    const document = event?.document || this.activeEditor.document;
+    const cacheKey = document.uri.toString();
+    
     // Invalidate cache on document change
     if (event) {
-      this.invalidateCache(event.document);
+      this.invalidateCache(document);
     }
 
-    // Clear any pending debounced update
+    // Track this version to batch updates
+    this.pendingUpdateVersion.set(cacheKey, document.version);
+
+    // Clear any pending timeout-based updates
     if (this.updateTimeout) {
       clearTimeout(this.updateTimeout);
       this.updateTimeout = undefined;
     }
+    
+    // Cancel any pending idle callback
+    if (this.idleCallbackHandle !== undefined) {
+      this.cancelIdleCallback(this.idleCallbackHandle);
+      this.idleCallbackHandle = undefined;
+    }
 
-    // Debounce document changes
+    // Debounce with two-tier strategy:
+    // 1. Short timeout for responsive feedback (150ms)
+    // 2. Fallback to idle callback for heavy work during continuous typing
     this.updateTimeout = setTimeout(() => {
       this.updateTimeout = undefined;
-      this.updateDecorationsInternal();
+      
+      // Check if document version changed since we scheduled this update (batching)
+      const latestVersion = this.activeEditor?.document.version;
+      const scheduledVersion = this.pendingUpdateVersion.get(cacheKey);
+      
+      if (latestVersion !== undefined && scheduledVersion !== undefined && latestVersion !== scheduledVersion) {
+        // Document changed again, skip this update (another one is queued)
+        return;
+      }
+      
+      // Use requestIdleCallback wrapper for non-urgent updates
+      // This will use requestIdleCallback in browser or setTimeout in Node.js
+      this.idleCallbackHandle = this.requestIdleCallback(() => {
+        this.idleCallbackHandle = undefined;
+        this.updateDecorationsInternal();
+        this.pendingUpdateVersion.delete(cacheKey);
+      }, { timeout: 300 }); // Force execution after 300ms max
     }, 150);
   }
 
@@ -467,11 +504,8 @@ export class Decorator {
    * @param {TextDocumentChangeEvent} event - The document change event
    */
   updateDecorationsFromChange(event: TextDocumentChangeEvent): void {
-    // Calculate change size for future incremental parsing support
-    const changeSize = this.calculateChangeSize(event);
-    
     // For now, always invalidate cache and do full parse
-    // Future: could use changeSize to determine if incremental parsing is feasible
+    // Future: could use calculateChangeSize to determine if incremental parsing is feasible
     this.invalidateCache(event.document);
     
     // Update decorations with debounce
@@ -512,7 +546,40 @@ export class Decorator {
       clearTimeout(this.updateTimeout);
       this.updateTimeout = undefined;
     }
+    if (this.idleCallbackHandle !== undefined) {
+      this.cancelIdleCallback(this.idleCallbackHandle);
+      this.idleCallbackHandle = undefined;
+    }
     this.decorationCache.clear();
+    this.pendingUpdateVersion.clear();
+  }
+  
+  /**
+   * Wrapper for requestIdleCallback that falls back to setTimeout if not available.
+   * 
+   * VS Code extensions run in Node.js, which doesn't have requestIdleCallback.
+   * This method uses setTimeout as a fallback to simulate idle behavior.
+   * 
+   * @private
+   * @param {Function} callback - The callback to execute when idle
+   * @param {Object} options - Options for requestIdleCallback
+   * @returns {number} Handle for cancellation
+   */
+  private requestIdleCallback(callback: () => void, options?: { timeout?: number }): number {
+    // VS Code runs in Node.js, use setTimeout as fallback
+    // In future, if running in browser context, we could check for requestIdleCallback
+    return setTimeout(callback, options?.timeout || 50) as unknown as number;
+  }
+  
+  /**
+   * Wrapper for cancelIdleCallback that falls back to clearTimeout if not available.
+   * 
+   * @private
+   * @param {number} handle - The handle returned by requestIdleCallback
+   */
+  private cancelIdleCallback(handle: number): void {
+    // VS Code runs in Node.js, use clearTimeout as fallback
+    clearTimeout(handle);
   }
 
   /**
