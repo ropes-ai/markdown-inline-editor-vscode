@@ -208,6 +208,48 @@ export class MarkdownParser {
   }
 
   /**
+   * Validates that a node has valid position information.
+   * @returns {boolean} True if node position is valid
+   */
+  private hasValidPosition(node: Node): boolean {
+    return !!(node.position && 
+              node.position.start.offset !== undefined && 
+              node.position.end.offset !== undefined);
+  }
+
+  /**
+   * Adds hide decorations for opening and closing markers, and content decoration.
+   * Common pattern for bold, italic, strikethrough, and inline code.
+   * 
+   * @param decorations - Array to add decorations to
+   * @param start - Start position of the node
+   * @param end - End position of the node
+   * @param markerLength - Length of the opening/closing marker
+   * @param contentType - Type of decoration for the content
+   */
+  private addMarkerDecorations(
+    decorations: DecorationRange[],
+    start: number,
+    end: number,
+    markerLength: number,
+    contentType: DecorationType
+  ): void {
+    const contentStart = start + markerLength;
+    const contentEnd = end - markerLength;
+
+    // Hide opening marker
+    decorations.push({ startPos: start, endPos: contentStart, type: 'hide' });
+
+    // Add content decoration
+    if (contentStart < contentEnd) {
+      decorations.push({ startPos: contentStart, endPos: contentEnd, type: contentType });
+    }
+
+    // Hide closing marker
+    decorations.push({ startPos: contentEnd, endPos: end, type: 'hide' });
+  }
+
+  /**
    * Processes a heading node.
    */
   private processHeading(
@@ -215,10 +257,10 @@ export class MarkdownParser {
     text: string,
     decorations: DecorationRange[]
   ): void {
-    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+    if (!this.hasValidPosition(node)) return;
 
-    const start = node.position.start.offset;
-    const end = node.position.end.offset;
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!;
 
     // Find the heading marker (#) by checking the source text
     let markerLength = 0;
@@ -284,51 +326,29 @@ export class MarkdownParser {
     decorations: DecorationRange[],
     ancestors: Node[]
   ): void {
-    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+    if (!this.hasValidPosition(node)) return;
 
-    const start = node.position.start.offset;
-    const end = node.position.end.offset;
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!;
 
-    // Determine marker type by checking source text
+    // Determine marker type by checking source text (** or __)
     const marker = this.getBoldMarker(text, start);
     if (!marker) return;
 
     const markerLength = marker.length;
-    const contentStart = start + markerLength;
-    const contentEnd = end - markerLength;
-
-    // Hide opening marker
-    decorations.push({
-      startPos: start,
-      endPos: start + markerLength,
-      type: 'hide',
-    });
-
-    // Hide closing marker
-    decorations.push({
-      startPos: contentEnd,
-      endPos: end,
-      type: 'hide',
-    });
 
     // Check if this is bold+italic (nested with emphasis)
     const isBoldItalic = ancestors.some(a => a.type === 'emphasis');
+    const contentType: DecorationType = isBoldItalic ? 'boldItalic' : 'bold';
 
-    // Process children for nested decorations
-    if (node.children) {
-      this.processChildren(node.children, text, decorations, contentStart);
-    }
+    this.addMarkerDecorations(decorations, start, end, markerLength, contentType);
 
-    // Add content decoration
-    if (contentStart < contentEnd) {
-      decorations.push({
-        startPos: contentStart,
-        endPos: contentEnd,
-        type: isBoldItalic ? 'boldItalic' : 'bold',
-      });
-    }
+    // Process children for nested decorations (handled by visit)
   }
 
+  /**
+   * Processes an emphasis (italic) node.
+   */
   /**
    * Processes an emphasis (italic) node.
    */
@@ -338,70 +358,35 @@ export class MarkdownParser {
     decorations: DecorationRange[],
     ancestors: Node[]
   ): void {
-    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+    if (!this.hasValidPosition(node)) return;
 
-    const start = node.position.start.offset;
-    const end = node.position.end.offset;
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!;
 
     // Determine marker type by checking source text
     const marker = this.getItalicMarker(text, start);
     if (!marker) return;
 
     const markerLength = marker.length;
-    const contentStart = start + markerLength;
-    const contentEnd = end - markerLength;
 
-    // Check if this emphasis is nested inside a strong node
-    // For ***text***, we have: strong(0-17) contains emphasis(1-16)
-    // The strong node hides the outer **, the emphasis should hide the inner *
-    // But we need to check if the emphasis markers are already covered by strong markers
+    // Skip if this emphasis is part of ***text*** pattern
+    // In that case, strong node already handles the decoration
     const parentStrong = ancestors.find(a => a.type === 'strong');
     if (parentStrong && parentStrong.position) {
       const strongStart = parentStrong.position.start.offset ?? -1;
       const strongEnd = parentStrong.position.end.offset ?? -1;
       
-      // If emphasis start is right after strong start (e.g., *** where strong starts at 0, emphasis at 1)
-      // and emphasis end is right before strong end, then the emphasis markers overlap with strong markers
-      // In this case, we should still process emphasis but adjust what we hide
+      // Check if emphasis markers overlap with strong markers (***text*** case)
       if (start === strongStart + 2 && end === strongEnd - 2) {
-        // This is ***text*** case - emphasis markers are the middle * in ***
-        // The outer ** is already hidden by strong, so we don't need to hide the inner * markers
-        // But we still need to apply the boldItalic decoration to the content
-        // Actually, the strong node already applies boldItalic to the content, so we can skip
-        return;
+        return; // Strong node already applied boldItalic decoration
       }
     }
 
-    // Hide opening marker
-    decorations.push({
-      startPos: start,
-      endPos: start + markerLength,
-      type: 'hide',
-    });
-
-    // Hide closing marker
-    decorations.push({
-      startPos: contentEnd,
-      endPos: end,
-      type: 'hide',
-    });
-
     // Check if this is bold+italic (nested with strong)
     const isBoldItalic = ancestors.some(a => a.type === 'strong');
+    const contentType: DecorationType = isBoldItalic ? 'boldItalic' : 'italic';
 
-    // Process children for nested decorations
-    if (node.children) {
-      this.processChildren(node.children, text, decorations, contentStart);
-    }
-
-    // Add content decoration
-    if (contentStart < contentEnd) {
-      decorations.push({
-        startPos: contentStart,
-        endPos: contentEnd,
-        type: isBoldItalic ? 'boldItalic' : 'italic',
-      });
-    }
+    this.addMarkerDecorations(decorations, start, end, markerLength, contentType);
   }
 
   /**
@@ -412,43 +397,13 @@ export class MarkdownParser {
     text: string,
     decorations: DecorationRange[]
   ): void {
-    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+    if (!this.hasValidPosition(node)) return;
 
-    const start = node.position.start.offset;
-    const end = node.position.end.offset;
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!;
 
-    // Strikethrough uses ~~ markers
-    const markerLength = 2;
-    const contentStart = start + markerLength;
-    const contentEnd = end - markerLength;
-
-    // Hide opening marker
-    decorations.push({
-      startPos: start,
-      endPos: start + markerLength,
-      type: 'hide',
-    });
-
-    // Hide closing marker
-    decorations.push({
-      startPos: contentEnd,
-      endPos: end,
-      type: 'hide',
-    });
-
-    // Process children for nested decorations
-    if (node.children) {
-      this.processChildren(node.children, text, decorations, contentStart);
-    }
-
-    // Add strikethrough decoration
-    if (contentStart < contentEnd) {
-      decorations.push({
-        startPos: contentStart,
-        endPos: contentEnd,
-        type: 'strikethrough',
-      });
-    }
+    // Strikethrough uses ~~ markers (length 2)
+    this.addMarkerDecorations(decorations, start, end, 2, 'strikethrough');
   }
 
   /**
@@ -459,12 +414,12 @@ export class MarkdownParser {
     text: string,
     decorations: DecorationRange[]
   ): void {
-    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+    if (!this.hasValidPosition(node)) return;
 
-    const start = node.position.start.offset;
-    const end = node.position.end.offset;
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!;
 
-    // Count backticks at start
+    // Count backticks at start to determine marker length
     let markerLength = 0;
     let pos = start;
     while (pos < end && text[pos] === '`') {
@@ -474,31 +429,7 @@ export class MarkdownParser {
 
     if (markerLength === 0) return;
 
-    const contentStart = start + markerLength;
-    const contentEnd = end - markerLength;
-
-    // Hide opening marker
-    decorations.push({
-      startPos: start,
-      endPos: start + markerLength,
-      type: 'hide',
-    });
-
-    // Add code decoration
-    if (contentStart < contentEnd) {
-      decorations.push({
-        startPos: contentStart,
-        endPos: contentEnd,
-        type: 'code',
-      });
-    }
-
-    // Hide closing marker
-    decorations.push({
-      startPos: contentEnd,
-      endPos: end,
-      type: 'hide',
-    });
+    this.addMarkerDecorations(decorations, start, end, markerLength, 'code');
   }
 
   /**
@@ -509,10 +440,10 @@ export class MarkdownParser {
     text: string,
     decorations: DecorationRange[]
   ): void {
-    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+    if (!this.hasValidPosition(node)) return;
 
-    const start = node.position.start.offset;
-    const end = node.position.end.offset;
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!
 
     // Find opening fence (```)
     const fenceStart = text.indexOf('```', start);
@@ -564,10 +495,10 @@ export class MarkdownParser {
     text: string,
     decorations: DecorationRange[]
   ): void {
-    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+    if (!this.hasValidPosition(node)) return;
 
-    const start = node.position.start.offset;
-    const end = node.position.end.offset;
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!;
 
     // Find opening bracket [
     const bracketStart = text.indexOf('[', start);
@@ -645,10 +576,10 @@ export class MarkdownParser {
     text: string,
     decorations: DecorationRange[]
   ): void {
-    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+    if (!this.hasValidPosition(node)) return;
 
-    const start = node.position.start.offset;
-    const end = node.position.end.offset;
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!;
 
     // Find opening ![
     const exclamationStart = text.indexOf('![', start);
@@ -723,10 +654,10 @@ export class MarkdownParser {
     decorations: DecorationRange[],
     processedPositions: Set<number>
   ): void {
-    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+    if (!this.hasValidPosition(node)) return;
 
-    const start = node.position.start.offset;
-    const end = node.position.end.offset;
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!;
 
     // Find all '>' markers at the start of lines within this blockquote
     // Blockquotes can span multiple lines, each starting with '>'
@@ -791,10 +722,10 @@ export class MarkdownParser {
     text: string,
     decorations: DecorationRange[]
   ): void {
-    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+    if (!this.hasValidPosition(node)) return;
 
-    const start = node.position.start.offset;
-    const end = node.position.end.offset;
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!;
 
     // Find the list marker at the start of the list item
     // Common markers: -, *, +
@@ -832,10 +763,10 @@ export class MarkdownParser {
     text: string,
     decorations: DecorationRange[]
   ): void {
-    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+    if (!this.hasValidPosition(node)) return;
 
-    const start = node.position.start.offset;
-    const end = node.position.end.offset;
+    const start = node.position!.start.offset!;
+    const end = node.position!.end.offset!;
 
     // Replace the entire horizontal rule text with a decoration
     decorations.push({
@@ -845,18 +776,6 @@ export class MarkdownParser {
     });
   }
 
-  /**
-   * Processes children nodes for nested decorations.
-   */
-  private processChildren(
-    children: Node[],
-    text: string,
-    decorations: DecorationRange[],
-    basePos: number
-  ): void {
-    // Children are already processed by the main visit() call
-    // This method is kept for potential future use
-  }
 
   /**
    * Handles empty image alt text that remark doesn't parse as an Image node.

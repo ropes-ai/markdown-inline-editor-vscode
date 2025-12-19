@@ -98,76 +98,39 @@ export function HeadingDecorationType() {
 }
 
 /**
- * Creates a decoration type for heading 1 styling.
- * 
- * @returns {vscode.TextEditorDecorationType} A decoration type for heading 1
+ * Heading decoration configuration
  */
-export function Heading1DecorationType() {
+const HEADING_CONFIG = [
+  { size: '200%', bold: true },  // H1
+  { size: '150%', bold: true },  // H2
+  { size: '110%', bold: true },  // H3
+  { size: '100%', bold: false }, // H4
+  { size: '90%', bold: false },  // H5
+  { size: '80%', bold: false },  // H6
+];
+
+/**
+ * Creates a heading decoration type with the specified level.
+ * 
+ * @param {number} level - Heading level (1-6)
+ * @returns {vscode.TextEditorDecorationType} A decoration type for the heading level
+ */
+function createHeadingDecoration(level: number) {
+  const config = HEADING_CONFIG[level - 1];
+  if (!config) throw new Error(`Invalid heading level: ${level}`);
+  
   return window.createTextEditorDecorationType({
-    textDecoration: 'none; font-size: 200%;',
-    fontWeight: 'bold',
+    textDecoration: `none; font-size: ${config.size};`,
+    ...(config.bold ? { fontWeight: 'bold' } : { color: new ThemeColor('descriptionForeground') }),
   });
 }
 
-/**
- * Creates a decoration type for heading 2 styling.
- * 
- * @returns {vscode.TextEditorDecorationType} A decoration type for heading 2
- */
-export function Heading2DecorationType() {
-  return window.createTextEditorDecorationType({
-    textDecoration: 'none; font-size: 150%;',
-    fontWeight: 'bold',
-  });
-}
-
-/**
- * Creates a decoration type for heading 3 styling.
- * 
- * @returns {vscode.TextEditorDecorationType} A decoration type for heading 3
- */
-export function Heading3DecorationType() {
-  return window.createTextEditorDecorationType({
-    textDecoration: 'none; font-size: 110%;',
-    fontWeight: 'bold',
-  });
-}
-
-/**
- * Creates a decoration type for heading 4 styling.
- * 
- * @returns {vscode.TextEditorDecorationType} A decoration type for heading 4
- */
-export function Heading4DecorationType() {
-  return window.createTextEditorDecorationType({
-    textDecoration: 'none; font-size: 100%;',
-    color: new ThemeColor('descriptionForeground'),
-  });
-}
-
-/**
- * Creates a decoration type for heading 5 styling.
- * 
- * @returns {vscode.TextEditorDecorationType} A decoration type for heading 5
- */
-export function Heading5DecorationType() {
-  return window.createTextEditorDecorationType({
-    textDecoration: 'none; font-size: 90%;',
-    color: new ThemeColor('descriptionForeground'),
-  });
-}
-
-/**
- * Creates a decoration type for heading 6 styling.
- * 
- * @returns {vscode.TextEditorDecorationType} A decoration type for heading 6
- */
-export function Heading6DecorationType() {
-  return window.createTextEditorDecorationType({
-    textDecoration: 'none; font-size: 80%;',
-    color: new ThemeColor('descriptionForeground'),
-  });
-}
+export const Heading1DecorationType = () => createHeadingDecoration(1);
+export const Heading2DecorationType = () => createHeadingDecoration(2);
+export const Heading3DecorationType = () => createHeadingDecoration(3);
+export const Heading4DecorationType = () => createHeadingDecoration(4);
+export const Heading5DecorationType = () => createHeadingDecoration(5);
+export const Heading6DecorationType = () => createHeadingDecoration(6);
 
 /**
  * Creates a decoration type for link styling.

@@ -328,6 +328,29 @@ export class Decorator {
     return filtered;
   }
 
+  /** Mapping of decoration types to their VS Code decoration instances */
+  private decorationTypeMap = new Map<DecorationType, any>([
+    ['hide', this.hideDecorationType],
+    ['bold', this.boldDecorationType],
+    ['italic', this.italicDecorationType],
+    ['boldItalic', this.boldItalicDecorationType],
+    ['strikethrough', this.strikethroughDecorationType],
+    ['code', this.codeDecorationType],
+    ['codeBlock', this.codeBlockDecorationType],
+    ['heading', this.headingDecorationType],
+    ['heading1', this.heading1DecorationType],
+    ['heading2', this.heading2DecorationType],
+    ['heading3', this.heading3DecorationType],
+    ['heading4', this.heading4DecorationType],
+    ['heading5', this.heading5DecorationType],
+    ['heading6', this.heading6DecorationType],
+    ['link', this.linkDecorationType],
+    ['image', this.imageDecorationType],
+    ['blockquote', this.blockquoteDecorationType],
+    ['listItem', this.listItemDecorationType],
+    ['horizontalRule', this.horizontalRuleDecorationType],
+  ]);
+
   /**
    * Applies filtered decorations to the editor.
    * 
@@ -339,26 +362,10 @@ export class Decorator {
       return;
     }
 
-    // Apply all decorations by type
-    this.activeEditor.setDecorations(this.hideDecorationType, filteredDecorations.get('hide') || []);
-    this.activeEditor.setDecorations(this.boldDecorationType, filteredDecorations.get('bold') || []);
-    this.activeEditor.setDecorations(this.italicDecorationType, filteredDecorations.get('italic') || []);
-    this.activeEditor.setDecorations(this.boldItalicDecorationType, filteredDecorations.get('boldItalic') || []);
-    this.activeEditor.setDecorations(this.strikethroughDecorationType, filteredDecorations.get('strikethrough') || []);
-    this.activeEditor.setDecorations(this.codeDecorationType, filteredDecorations.get('code') || []);
-    this.activeEditor.setDecorations(this.codeBlockDecorationType, filteredDecorations.get('codeBlock') || []);
-    this.activeEditor.setDecorations(this.headingDecorationType, filteredDecorations.get('heading') || []);
-    this.activeEditor.setDecorations(this.heading1DecorationType, filteredDecorations.get('heading1') || []);
-    this.activeEditor.setDecorations(this.heading2DecorationType, filteredDecorations.get('heading2') || []);
-    this.activeEditor.setDecorations(this.heading3DecorationType, filteredDecorations.get('heading3') || []);
-    this.activeEditor.setDecorations(this.heading4DecorationType, filteredDecorations.get('heading4') || []);
-    this.activeEditor.setDecorations(this.heading5DecorationType, filteredDecorations.get('heading5') || []);
-    this.activeEditor.setDecorations(this.heading6DecorationType, filteredDecorations.get('heading6') || []);
-    this.activeEditor.setDecorations(this.linkDecorationType, filteredDecorations.get('link') || []);
-    this.activeEditor.setDecorations(this.imageDecorationType, filteredDecorations.get('image') || []);
-    this.activeEditor.setDecorations(this.blockquoteDecorationType, filteredDecorations.get('blockquote') || []);
-    this.activeEditor.setDecorations(this.listItemDecorationType, filteredDecorations.get('listItem') || []);
-    this.activeEditor.setDecorations(this.horizontalRuleDecorationType, filteredDecorations.get('horizontalRule') || []);
+    // Apply all decorations by iterating through the type map
+    for (const [type, decorationType] of this.decorationTypeMap.entries()) {
+      this.activeEditor.setDecorations(decorationType, filteredDecorations.get(type) || []);
+    }
   }
 
   /**
@@ -496,20 +503,6 @@ export class Decorator {
     return (changedLength / totalLength) * 100;
   }
 
-  /**
-   * Gets changed ranges from a document change event.
-   * 
-   * @private
-   * @param {TextDocumentChangeEvent} event - The document change event
-   * @returns {Range[]} Array of changed ranges
-   */
-  private getChangedRanges(event: TextDocumentChangeEvent): Range[] {
-    const ranges: Range[] = [];
-    for (const change of event.contentChanges) {
-      ranges.push(change.range);
-    }
-    return ranges;
-  }
 
   /**
    * Dispose of resources and clear any pending updates.
