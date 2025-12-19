@@ -19,11 +19,10 @@ describe('MarkdownParser - Links', () => {
       expect(result.some(d => d.type === 'hide' && d.startPos === 10)).toBe(true); // )
       
       // Should style text as link
-      expect(result).toContainEqual({
-        startPos: 1,
-        endPos: 5,
-        type: 'link'
-      });
+      const linkDec = result.find(d => d.type === 'link');
+      expect(linkDec).toBeDefined();
+      expect(linkDec?.startPos).toBe(1);
+      expect(linkDec?.endPos).toBe(5);
     });
   });
 

@@ -1,4 +1,4 @@
-import type { Root, Node, Strong, Emphasis, Heading, InlineCode, Code, Link, Image, Delete } from 'mdast';
+import type { Root, Node, Strong, Emphasis, Heading, InlineCode, Code, Link, Image, Delete, Blockquote } from 'mdast';
 import { getRemarkProcessorSync, getRemarkProcessor } from './parser-remark';
 
 /**
@@ -183,6 +183,10 @@ export class MarkdownParser {
         case 'image':
           this.processImage(node as Image, text, decorations);
           break;
+
+        case 'blockquote':
+          this.processBlockquote(node as Blockquote, text, decorations);
+          break;
       }
     });
   }
@@ -323,12 +327,6 @@ export class MarkdownParser {
     const start = node.position.start.offset;
     const end = node.position.end.offset;
 
-    // Check if this is part of a bold marker
-    if (text[start + 1] === '*' || text[start + 1] === '_') {
-      // This is part of bold, skip it (handled by strong)
-      return;
-    }
-
     // Determine marker type by checking source text
     const marker = this.getItalicMarker(text, start);
     if (!marker) return;
@@ -337,9 +335,25 @@ export class MarkdownParser {
     const contentStart = start + markerLength;
     const contentEnd = end - markerLength;
 
-    // Check if closing marker is part of bold
-    if (contentEnd + 1 < text.length && (text[contentEnd + 1] === '*' || text[contentEnd + 1] === '_')) {
-      return;
+    // Check if this emphasis is nested inside a strong node
+    // For ***text***, we have: strong(0-17) contains emphasis(1-16)
+    // The strong node hides the outer **, the emphasis should hide the inner *
+    // But we need to check if the emphasis markers are already covered by strong markers
+    const parentStrong = ancestors.find(a => a.type === 'strong');
+    if (parentStrong && parentStrong.position) {
+      const strongStart = parentStrong.position.start.offset ?? -1;
+      const strongEnd = parentStrong.position.end.offset ?? -1;
+      
+      // If emphasis start is right after strong start (e.g., *** where strong starts at 0, emphasis at 1)
+      // and emphasis end is right before strong end, then the emphasis markers overlap with strong markers
+      // In this case, we should still process emphasis but adjust what we hide
+      if (start === strongStart + 2 && end === strongEnd - 2) {
+        // This is ***text*** case - emphasis markers are the middle * in ***
+        // The outer ** is already hidden by strong, so we don't need to hide the inner * markers
+        // But we still need to apply the boldItalic decoration to the content
+        // Actually, the strong node already applies boldItalic to the content, so we can skip
+        return;
+      }
     }
 
     // Hide opening marker
@@ -677,6 +691,61 @@ export class MarkdownParser {
           });
         }
       }
+    }
+  }
+
+  /**
+   * Processes a blockquote node.
+   */
+  private processBlockquote(
+    node: Blockquote,
+    text: string,
+    decorations: DecorationRange[]
+  ): void {
+    if (!node.position || node.position.start.offset === undefined || node.position.end.offset === undefined) return;
+
+    const start = node.position.start.offset;
+    const end = node.position.end.offset;
+
+    // Find all '>' markers at the start of lines within this blockquote
+    // Blockquotes can span multiple lines, each starting with '>'
+    let pos = start;
+    while (pos < end) {
+      // Find line start (either document start or after newline)
+      const lineStart = pos === 0 ? 0 : text.lastIndexOf('\n', pos - 1) + 1;
+      
+      // Find '>' marker in this line (should be at or near line start)
+      const gtIndex = text.indexOf('>', lineStart);
+      if (gtIndex !== -1 && gtIndex < end) {
+        // Check if there's whitespace before '>' (allowed in markdown)
+        const beforeGt = text.substring(lineStart, gtIndex);
+        const isAtLineStart = beforeGt.trim().length === 0;
+        
+        if (isAtLineStart) {
+          // Check if there's a space after '>'
+          const afterGt = gtIndex + 1;
+          if (afterGt < end && text[afterGt] === ' ') {
+            // Hide '> ' (marker and space)
+            decorations.push({
+              startPos: gtIndex,
+              endPos: afterGt + 1,
+              type: 'hide',
+            });
+          } else {
+            // Just hide '>'
+            decorations.push({
+              startPos: gtIndex,
+              endPos: afterGt,
+              type: 'hide',
+            });
+          }
+        }
+      }
+      
+      // Move to next line
+      const nextLine = text.indexOf('\n', pos);
+      if (nextLine === -1 || nextLine >= end) break;
+      pos = nextLine + 1;
     }
   }
 
