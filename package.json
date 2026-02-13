@@ -84,7 +84,7 @@
         },
         "markdownInlineEditor.decorations.ghostFaintOpacity": {
           "type": "number",
-          "default": 0.3,
+          "default": 0,
           "minimum": 0,
           "maximum": 1,
           "description": "Opacity for ghost faint decorations",
@@ -108,13 +108,13 @@
         },
         "markdownInlineEditor.links.singleClickOpen": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Open links and images with single click",
           "markdownDescription": "Single-click to open links and image links (no Ctrl+Click needed). May interfere with text selection."
         },
         "markdownInlineEditor.emojis.enabled": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Render emoji shortcodes (e.g., :smile:)",
           "markdownDescription": "Render emoji shortcodes (e.g., :smile:) inline in Markdown documents."
         }

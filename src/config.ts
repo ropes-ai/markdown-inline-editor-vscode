@@ -14,14 +14,14 @@ export const config = {
     singleClickOpen(): boolean {
       return vscode.workspace
         .getConfiguration(SECTION)
-        .get<boolean>('links.singleClickOpen', false);
+        .get<boolean>('links.singleClickOpen', true);
     },
   },
   decorations: {
     ghostFaintOpacity(): number {
       return vscode.workspace
         .getConfiguration(SECTION)
-        .get<number>('decorations.ghostFaintOpacity', 0.3);
+        .get<number>('decorations.ghostFaintOpacity', 0);
     },
     frontmatterDelimiterOpacity(): number {
       return vscode.workspace
@@ -38,7 +38,7 @@ export const config = {
     enabled(): boolean {
       return vscode.workspace
         .getConfiguration(SECTION)
-        .get<boolean>('emojis.enabled', true);
+        .get<boolean>('emojis.enabled', false);
     },
   },
 } as const;
