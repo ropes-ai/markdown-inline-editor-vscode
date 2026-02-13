@@ -12,64 +12,6 @@ import { MarkdownParseCache } from './markdown-parse-cache';
 import { initMermaidRenderer, disposeMermaidRenderer } from './mermaid/mermaid-renderer';
 
 /**
- * Checks if a recommended extension is installed and optionally shows a notification.
- * 
- * @param extensionId - The extension ID (e.g., 'yzhang.markdown-all-in-one')
- * @param context - The extension context for storing state
- * @param showNotification - Whether to show a notification if not installed (default: false)
- * @returns True if the extension is installed, false otherwise
- */
-function checkRecommendedExtension(
-  extensionId: string,
-  context: vscode.ExtensionContext,
-  showNotification: boolean = false
-): boolean {
-  const extension = vscode.extensions.getExtension(extensionId);
-  const isInstalled = extension !== undefined;
-  
-  if (!isInstalled && showNotification) {
-    const notificationKey = `recommendationShown.${extensionId}`;
-    const hasShownBefore = context.globalState.get<boolean>(notificationKey, false);
-    
-    if (!hasShownBefore) {
-      const extensionName = extensionId.split('.').pop() || extensionId;
-      vscode.window.showInformationMessage(
-        `Enhance your Markdown workflow: Consider installing "${extensionName}"`,
-        'Install',
-        'Dismiss'
-      ).then((selection) => {
-        if (selection === 'Install') {
-          vscode.commands.executeCommand('workbench.extensions.installExtension', extensionId);
-        }
-        // Mark as shown regardless of user choice
-        context.globalState.update(notificationKey, true);
-      });
-    }
-  }
-  
-  return isInstalled;
-}
-
-/**
- * Checks for recommended extensions and shows notifications if needed.
- * Only shows each recommendation once per user.
- * 
- * @param context - The extension context
- */
-function checkRecommendedExtensions(context: vscode.ExtensionContext): void {
-  // List of recommended extension IDs
-  const recommendedExtensions = [
-    'yzhang.markdown-all-in-one',
-    'MermaidChart.vscode-mermaid-chart'
-  ];
-  
-  // Check each extension (notifications are shown only once per extension)
-  recommendedExtensions.forEach((extensionId) => {
-    checkRecommendedExtension(extensionId, context, true);
-  });
-}
-
-/**
  * Activates the markdown inline preview extension.
  * 
  * This function is called by VS Code when the extension is activated (typically
@@ -98,9 +40,6 @@ export function activate(context: vscode.ExtensionContext) {
   decorator.updateDiffViewDecorationSetting(!diffViewApplyDecorations);
   
   decorator.setActiveEditor(vscode.window.activeTextEditor);
-
-  // Check for recommended extensions (shows notifications if not installed)
-  checkRecommendedExtensions(context);
 
   // Register link provider for clickable markdown links
   const linkProvider = new MarkdownLinkProvider(parseCache);
