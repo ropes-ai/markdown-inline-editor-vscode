@@ -6,6 +6,7 @@ export type ScopeEntry = {
   startPos: number;
   endPos: number;
   range: Range;
+  kind?: string;
 };
 
 type RangeFactory = (startPos: number, endPos: number, originalText: string) => Range | null;
@@ -107,8 +108,11 @@ export function filterDecorationsForEditor(
       continue;
     }
 
-    if (headingTypes.has(decoration.type) && isActiveLine) {
-      // Show raw heading text (no heading styling) on active lines
+    if (headingTypes.has(decoration.type)) {
+      // Keep heading styling rendered on active lines while editing.
+      const ranges = filtered.get(decoration.type) || [];
+      ranges.push(range);
+      filtered.set(decoration.type, ranges);
       continue;
     }
 
@@ -117,12 +121,16 @@ export function filterDecorationsForEditor(
       const isHeadingMarkerHide = decoration.type === 'hide' &&
         headingMarkerEndPositions.has(decoration.endPos);
 
-      if (intersectsRaw) {
-        // Raw state: skip (show actual syntax)
+      if (isHeadingMarkerHide) {
+        // Keep heading markers hidden even when the heading is active.
+        const ranges = filtered.get(decoration.type) || [];
+        ranges.push(range);
+        filtered.set(decoration.type, ranges);
         continue;
       }
-      if (isHeadingMarkerHide && isActiveLine) {
-        // Show heading markers on active lines
+
+      if (intersectsRaw) {
+        // Raw state: skip (show actual syntax)
         continue;
       }
       if (isActiveLine) {
@@ -199,6 +207,9 @@ function collectRawRanges(selectedRanges: Range[], scopes: ScopeEntry[]): Range[
   const rawRanges: Range[] = [];
   for (const selection of selectedRanges) {
     for (const scope of scopes) {
+      if (scope.kind === 'heading') {
+        continue;
+      }
       const intersection = selection.intersection(scope.range);
       if (intersection !== undefined) {
         rawRanges.push(scope.range);
@@ -219,6 +230,9 @@ function collectCursorScopeRanges(cursorPositions: Position[], scopes: ScopeEntr
     // Check if cursor is inside scope or at its boundaries (start or end)
     // Range.contains() uses exclusive end, so we also check if position equals start or end
     const matchingScopes = scopes.filter((scope) => {
+      if (scope.kind === 'heading') {
+        return false;
+      }
       const isInside = scope.range.contains(position);
       const isAtStart = position.line === scope.range.start.line &&
                         position.character === scope.range.start.character;

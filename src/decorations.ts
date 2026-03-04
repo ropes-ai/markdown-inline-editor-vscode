@@ -252,12 +252,12 @@ export function HeadingDecorationType() {
  * Heading decoration configuration
  */
 const HEADING_CONFIG = [
-  { size: "180%", bold: true, color: ROPES_PURPLE_PRIMARY }, // H1: Hero accent
-  { size: "140%", bold: true, color: "#8d3fd0" }, // H2: Deep purple
-  { size: "120%", bold: true, color: "#5a57c7" }, // H3: Indigo bridge
-  { size: "110%", bold: false, color: "#0ebf9c" }, // H4: Teal lean
-  { size: "100%", bold: false, color: "#139d8a" }, // H5: Muted teal
-  { size: "90%", bold: false, color: "#3f7f79" }, // H6: Low-contrast teal
+  { size: "180%", bold: true },
+  { size: "140%", bold: true },
+  { size: "120%", bold: true },
+  { size: "110%", bold: false },
+  { size: "100%", bold: false },
+  { size: "90%", bold: false },
 ];
 /**
  * Creates a heading decoration type with the specified level.
@@ -271,7 +271,12 @@ function createHeadingDecoration(level: number) {
 
   return window.createTextEditorDecorationType({
     textDecoration: `none; font-size: ${config.size}; padding-top: 0.08em; padding-bottom: 0.08em;`,
-    color: config.color,
+    light: {
+      color: "rgb(62, 62, 60)",
+    },
+    dark: {
+      color: "#ffffff",
+    },
     ...(config.bold ? { fontWeight: "bold" } : {}),
   });
 }
@@ -292,13 +297,9 @@ export const Heading6DecorationType = () => createHeadingDecoration(6);
  */
 export function LinkDecorationType() {
   return window.createTextEditorDecorationType({
-    color: ROPES_PURPLE_PRIMARY,
-    textDecoration: `underline; text-decoration-color: ${ROPES_TEAL_PRIMARY}; text-decoration-thickness: 1.5px;`,
+    color: new ThemeColor("textLink.foreground"),
+    textDecoration: "underline",
     cursor: "pointer", // Show pointer cursor on hover
-    after: {
-      contentText: " 🔗",
-      color: ROPES_TEAL_PRIMARY,
-    },
   });
 }
 

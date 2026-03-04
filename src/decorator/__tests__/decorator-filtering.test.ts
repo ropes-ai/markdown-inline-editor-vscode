@@ -15,21 +15,30 @@ type ScopeEntry = {
   startPos: number;
   endPos: number;
   range: ReturnType<typeof Range>;
+  kind?: string;
 };
+type ScopeRangeInput = [number, number] | { startPos: number; endPos: number; kind?: string };
 
 function filterDecorationsForSelection(
   text: string,
   decorations: DecorationRange[],
-  scopeRanges: Array<[number, number]>,
+  scopeRanges: ScopeRangeInput[],
   selection: ReturnType<typeof Selection>
 ): Map<DecorationType, unknown[]> {
   const document = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
   const editor = new TextEditor(document, [selection]);
-  const scopes: ScopeEntry[] = scopeRanges.map(([startPos, endPos]) => ({
-    startPos,
-    endPos,
-    range: new Range(document.positionAt(startPos), document.positionAt(endPos)),
-  }));
+  const scopes: ScopeEntry[] = scopeRanges.map((scopeRange) => {
+    const { startPos, endPos, kind } = Array.isArray(scopeRange)
+      ? { startPos: scopeRange[0], endPos: scopeRange[1], kind: undefined }
+      : scopeRange;
+
+    return {
+      startPos,
+      endPos,
+      range: new Range(document.positionAt(startPos), document.positionAt(endPos)),
+      kind,
+    };
+  });
   const parseCache = {
     get: () => ({ version: 1, text, decorations: [], scopes: [] }),
     invalidate: () => {},
@@ -64,7 +73,7 @@ describe('Decorator filtering behavior', () => {
     expect(filtered.has('hide')).toBe(false);
   });
 
-  it('reveals heading markers and removes heading styling on active line', () => {
+  it('keeps heading rendered styling when cursor is inside heading scope', () => {
     const text = '# Heading';
     const decorations: DecorationRange[] = [
       { startPos: 0, endPos: 2, type: 'hide' },
@@ -73,11 +82,16 @@ describe('Decorator filtering behavior', () => {
     ];
 
     const selection = new Selection(new Position(0, 1), new Position(0, 1));
-    const filtered = filterDecorationsForSelection(text, decorations, [[0, 9]], selection);
+    const filtered = filterDecorationsForSelection(
+      text,
+      decorations,
+      [{ startPos: 0, endPos: 9, kind: 'heading' }],
+      selection
+    );
 
-    expect(filtered.has('heading1')).toBe(false);
-    expect(filtered.has('heading')).toBe(false);
-    expect(filtered.has('hide')).toBe(false);
+    expect(filtered.get('heading1')?.length).toBe(1);
+    expect(filtered.get('heading')?.length).toBe(1);
+    expect(filtered.get('hide')?.length).toBe(1);
     expect(filtered.has('ghostFaint')).toBe(false);
   });
 

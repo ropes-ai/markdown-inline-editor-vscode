@@ -582,6 +582,7 @@ export class Decorator {
           startPos: scope.startPos,
           endPos: scope.endPos,
           range,
+          kind: scope.kind,
         });
       }
     }
